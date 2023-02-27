@@ -88,5 +88,3 @@ Whilst the Twilio Functions could be replaced using another form of endpoint (AW
 The Studio Flow is looking for specific intent names and this could be argued as being tightly coupled with the Lex implementation which also drives us to design decisions shown in option 2.
 
 # Option 2 - Webhook Integration
-
-https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet
