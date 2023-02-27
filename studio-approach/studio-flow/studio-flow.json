@@ -1,0 +1,325 @@
+{
+  "description": "Bot flow for creating a Flex webchat task",
+  "states": [
+    {
+      "name": "Trigger",
+      "type": "trigger",
+      "transitions": [
+        {
+          "next": "SetServerlessDomainName",
+          "event": "incomingMessage"
+        },
+        {
+          "event": "incomingCall"
+        },
+        {
+          "event": "incomingConversationMessage"
+        },
+        {
+          "event": "incomingRequest"
+        },
+        {
+          "event": "incomingParent"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": -40,
+          "y": -280
+        }
+      }
+    },
+    {
+      "name": "SendMessageToAgent",
+      "type": "send-to-flex",
+      "transitions": [
+        {
+          "event": "callComplete"
+        },
+        {
+          "event": "failedToEnqueue"
+        },
+        {
+          "event": "callFailure"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": 890,
+          "y": 1180
+        },
+        "workflow": "WWxx",
+        "channel": "TCxx",
+        "attributes": "{\"name\": \"{{trigger.message.ChannelAttributes.from}}\", \"channelType\": \"{{trigger.message.ChannelAttributes.channel_type}}\", \"channelSid\": \"{{trigger.message.ChannelSid}}\"}"
+      }
+    },
+    {
+      "name": "SendMessageToLex",
+      "type": "make-http-request",
+      "transitions": [
+        {
+          "next": "CheckIntent",
+          "event": "success"
+        },
+        {
+          "event": "failed"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": -20,
+          "y": 430
+        },
+        "method": "POST",
+        "content_type": "application/x-www-form-urlencoded;charset=utf-8",
+        "parameters": [
+          {
+            "value": "{{flow.variables.customerMessage}}",
+            "key": "customerMessage"
+          },
+          {
+            "value": "{{trigger | to_json}}",
+            "key": "trigger"
+          }
+        ],
+        "url": "{{flow.variables.serverlessDomainName}}/handleMessagesForBot"
+      }
+    },
+    {
+      "name": "SetInitialCustomerMessage",
+      "type": "set-variables",
+      "transitions": [
+        {
+          "next": "SendMessageToLex",
+          "event": "next"
+        }
+      ],
+      "properties": {
+        "variables": [
+          {
+            "value": "{{trigger.message.Body}}",
+            "key": "customerMessage"
+          }
+        ],
+        "offset": {
+          "x": -20,
+          "y": 170
+        }
+      }
+    },
+    {
+      "name": "SendBotReplyAndWait",
+      "type": "send-and-wait-for-reply",
+      "transitions": [
+        {
+          "next": "SetCustomerReplyMessage",
+          "event": "incomingMessage"
+        },
+        {
+          "event": "timeout"
+        },
+        {
+          "event": "deliveryFailure"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": -20,
+          "y": 1170
+        },
+        "service": "{{trigger.message.InstanceSid}}",
+        "channel": "{{trigger.message.ChannelSid}}",
+        "from": "Lex",
+        "body": "{{widgets.SendMessageToLex.parsed.botReplyMessage}}",
+        "timeout": "3600"
+      }
+    },
+    {
+      "name": "SetCustomerReplyMessage",
+      "type": "set-variables",
+      "transitions": [
+        {
+          "next": "SendMessageToLex",
+          "event": "next"
+        }
+      ],
+      "properties": {
+        "variables": [
+          {
+            "value": "{{widgets.SendBotReplyAndWait.inbound.Body}}",
+            "key": "customerMessage"
+          }
+        ],
+        "offset": {
+          "x": -370,
+          "y": 1390
+        }
+      }
+    },
+    {
+      "name": "SendPreAgentMessage",
+      "type": "send-message",
+      "transitions": [
+        {
+          "next": "SendMessageToAgent",
+          "event": "sent"
+        },
+        {
+          "event": "failed"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": 870,
+          "y": 860
+        },
+        "service": "{{trigger.message.InstanceSid}}",
+        "channel": "{{trigger.message.ChannelSid}}",
+        "from": "Lex",
+        "to": "{{contact.channel.address}}",
+        "body": "{{widgets.SendMessageToLex.parsed.botReplyMessage}}"
+      }
+    },
+    {
+      "name": "CheckIntent",
+      "type": "split-based-on",
+      "transitions": [
+        {
+          "next": "SendBotReplyAndWait",
+          "event": "noMatch"
+        },
+        {
+          "next": "SendPreAgentMessage",
+          "event": "match",
+          "conditions": [
+            {
+              "friendly_name": "If value equal_to Agent",
+              "arguments": [
+                "{{widgets.SendMessageToLex.parsed.intent}}"
+              ],
+              "type": "equal_to",
+              "value": "Agent"
+            }
+          ]
+        },
+        {
+          "next": "CheckIfReadyForFulfillment",
+          "event": "match",
+          "conditions": [
+            {
+              "friendly_name": "If value equal_to OrderFlowers",
+              "arguments": [
+                "{{widgets.SendMessageToLex.parsed.intent}}"
+              ],
+              "type": "equal_to",
+              "value": "OrderFlowers"
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "input": "{{widgets.SendMessageToLex.parsed.intent}}",
+        "offset": {
+          "x": -30,
+          "y": 630
+        }
+      }
+    },
+    {
+      "name": "CheckIfReadyForFulfillment",
+      "type": "split-based-on",
+      "transitions": [
+        {
+          "next": "SendBotReplyAndWait",
+          "event": "noMatch"
+        },
+        {
+          "next": "ReadyForFulfillment",
+          "event": "match",
+          "conditions": [
+            {
+              "friendly_name": "If value equal_to ReadyForFulfillment",
+              "arguments": [
+                "{{widgets.SendMessageToLex.parsed.state}}"
+              ],
+              "type": "equal_to",
+              "value": "ReadyForFulfillment"
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "input": "{{widgets.SendMessageToLex.parsed.state}}",
+        "offset": {
+          "x": 350,
+          "y": 880
+        }
+      }
+    },
+    {
+      "name": "ReadyForFulfillment",
+      "type": "make-http-request",
+      "transitions": [
+        {
+          "event": "success"
+        },
+        {
+          "event": "failed"
+        }
+      ],
+      "properties": {
+        "offset": {
+          "x": 460,
+          "y": 1170
+        },
+        "method": "GET",
+        "content_type": "application/x-www-form-urlencoded;charset=utf-8",
+        "parameters": [
+          {
+            "value": "{{trigger.message.ChannelSid}}",
+            "key": "channelSid"
+          },
+          {
+            "value": "{{widgets.SendMessageToLex.parsed.intent}}",
+            "key": "intent"
+          },
+          {
+            "value": "{{widgets.SendMessageToLex.parsed.slots}}",
+            "key": "slots"
+          },
+          {
+            "value": "{{trigger.message.InstanceSid}}",
+            "key": "serviceSid"
+          }
+        ],
+        "url": "{{flow.variables.serverlessDomainName}}/readyForFulfillment"
+      }
+    },
+    {
+      "name": "SetServerlessDomainName",
+      "type": "set-variables",
+      "transitions": [
+        {
+          "next": "SetInitialCustomerMessage",
+          "event": "next"
+        }
+      ],
+      "properties": {
+        "variables": [
+          {
+            "value": "https://example.twil.io",
+            "key": "serverlessDomainName"
+          }
+        ],
+        "offset": {
+          "x": -30,
+          "y": -80
+        }
+      }
+    }
+  ],
+  "initial_state": "Trigger",
+  "flags": {
+    "allow_concurrent_calls": true
+  }
+}
