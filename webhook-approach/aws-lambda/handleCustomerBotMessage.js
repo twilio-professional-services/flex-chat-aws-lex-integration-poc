@@ -15,7 +15,6 @@ export const handler = async (event) => {
   const config = {
     region: process.env.AWS_REGION,
   };
-  console.log(event.body);
   const { customerMessage, botName, sessionId } = JSON.parse(event.body);
   const { botAliasId, botId } = botIdsFromBotName(botName);
 

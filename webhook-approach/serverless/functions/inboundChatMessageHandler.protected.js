@@ -34,7 +34,6 @@ exports.handler = async (context, event, callback) => {
     .fetch();
 
   const channelAttributes = JSON.parse(channel.attributes);
-  if (!channelAttributes.pre_engagement_data) return callback();
   const botName = botNameFromPreEngagement(
     channelAttributes.pre_engagement_data
   );

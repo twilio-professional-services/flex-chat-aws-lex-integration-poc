@@ -1,16 +1,12 @@
 # Flex WebChat Integration to AWS Lex
 
-# WORK IN PROGRESS - Option 2 has the code and diagram but needs overview and setup write up
-
-![Work In Progress](readme-images/WorkInProgress.png)
-
 ## Disclaimer
 
 **This software is to be considered "sample code", a Type B Deliverable, and is delivered "as-is" to the user. Twilio bears no responsibility to support the use or implementation of this software.**
 
-## Flex UI V1/Legacy Flex Chat with Programmable Chat
+## This POC Supports Flex UI V1/Legacy Flex Chat using Programmable Chat
 
-**For Flex Conversations the general patterns will still apply but the studio trigger examples and API requests would need changing for Flex Conversations**
+**For Flex Conversations the general patterns will still apply but the studio trigger examples and API requests would need changing for Flex Conversations. See the 'other considerations' section for details**
 
 # Overview
 
@@ -95,18 +91,64 @@ The Studio Flow is looking for specific intent names and this could be argued as
 
 ## Overview
 
-TODO
+In option 1 using Studio we had a solution that would invoke a function that would execute until the bot responded and would then pass the raw response back to the Studio Flow. To ensure that function invocation time is kept to a minimum and to decouple the Twilio/Flex side of things from the Bot internals option 2 uses an async message approach and seperates Programmable Chat Channel handling from Bot handling.
+
+A [Flex Flow with a webhook integration](https://www.twilio.com/docs/flex/developer/messaging/manage-flows#external-webhookhttp-request-widget) is first configured which will be triggered for all new messages from the customer. This webhook will send a webhook with the Channel sid and Message body to a Twilio Function [inboundChatMessageHandler](webhook-approach/serverless/functions/inboundChatMessageHandler.protected.js). This inbound message handler reads the channels attributes in to get the pre engagement data to retrieve the bot name and then does a HTTP post to an AWS Lambda which includes the message body and the Programmable Chat Channel Sid which the Bot will use as a session id.
+
+The HTTP post from the inbound message webhook handler goes to the AWS Lambda [handleCustomerBotMessage](webhook-approach/aws-lambda/handleCustomerBotMessage.js). The Lambda just takes the bot name, message and channel/session id and enqueues it into an AWS Simple Queue Service ([SQS](https://aws.amazon.com/sqs/)). The Lambda then responds with an OK which terminates the inbound message handler Twilio function which ensures that it quickly responds to the message webhook without waiting for the bot response.
+
+A second AWS Lambda [processCustomerBotMessageFromSQS](webhook-approach/aws-lambda/processCustomerBotMessageFromSQS.js) is configured to be triggered for each message added to the SQS. This Lambda uses the AWS [lex-runtime sdk](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/LexRuntimeV2.html) recognizeText method to wait for a response from Lex.
+Once the response is received it does a HTTP post to the Twilio Function [outboundChatMessageHandler](webhook-approach/serverless/functions/outboundChatMessageHandler.js) which will add the response to the Programmable Chat Channel and depending if the Bot intent determines an agent is required or if the conversation can be considered fulfilled will process accordingly.
+
+Note that the HTTP post to the outbound chat message handler has a nextStep parameter and the function will follow the logic below:
+
+```
++ WAIT_FOR_MESSAGE: Add the Bot response to the channel and no further action needed. Subsequent replies from the customer will go back to the bot
++ CLOSE_CHAT: Update the Chat Channel Attributes status parameter to INACTIVE. This signals to the WebChat client that the conversation is completed
++ AGENT: Remove the webhook that is sending messages to the inbound chat handler which was added on channel create by the Flex Flow so that subsequent messages just go into the channel for the agent and not to the Bot. Create a TaskRouter Task referencing the Programmable Channel Sid to route the conversation to an agent
+```
 
 ## Setup
 
 TODO
 
-## Other Considerations - TODO
+## Test it out!
 
-- Start in Studio and then switch to BOT?
-- Other options rather than 2 Lambda and SQS? Yep - could just point webhook to a lambda that combines the functionality of the two twilio functions and two lambdas which would be simpler. This documented approach breaks out the logic and handles Lex blocking.
-- endpoint security
-- How to migrate this POC to Flex Conversations
+We can make use of the demo of Flex WebChat:
+https://demo.flex.twilio.com/chat?accountSid=ACxxx&flexFlowSid=FOxxx&botName=OrderFlowers
+
+Note you will need to add in your account sid and the Flex Flow Sid that is pointing to the Studio Flow deployed above.
+We are passing in the botName as a url query parameter and this url is passed as the 'location' in the pre engagement data. Production examples may want to just add it to the pre enagement data rather than the location/url.
+
+## Other Considerations
+
+- I have a use case that needs to start in Studio before going to the Bot - how would this be implemented?
+
+  Note that the reason the Studio Flow is invoked initially is that the Flex Flow used is referencing the Studio Flow. To leave the Studio Flow and pass subsequent messages to the Bot would just involve removing the Studio Webhook and adding a [Programmable Chat Webhook](https://www.twilio.com/docs/chat/rest/channel-webhook-resource#create-a-channelwebhook-resource) that triggers onMessagAdded and points to the inboundChatMessageHandler Twilio Function.
+
+- Does option 2 require AWS Lambdas and SQS?
+
+  The key takeaway for option 2 is the async approach to receiving messages from the customer and replying with Bot responses and the seperation of message vs bot logic. The AWS Lambda and SQS configuration is just one way to achieve this. For example if you were confident that your Bot responses would be within the 5 second Programmable Chat you could in theory cram all of the functionality from the two Twilio Functions and two Lambdas into one Lambda which would block waiting for a response from the Bot.
+  In some use cases this may be a good option for some customers looking to deploy a simple POC.
+
+- Is this very secure?
+
+  No - in the interest of keeping the POC implementation simple the AWS Lambda is a public url rather than API gateway and the public Twilio Function for outbound chat message handling has no mechanism to check where the request came from. The inbound chat message handler is marked as protected so this is secure in that it would need to be invoked by a Twilio Webhook.
+  https://www.twilio.com/docs/serverless/functions-assets/visibility#protected
+  https://www.twilio.com/docs/serverless/functions-assets/quickstart/basic-auth
+  https://docs.aws.amazon.com/lambda/latest/dg/services-apigateway.html
+
+- Will this POC work for SMS/WhatsApp?
+
+  It has been tested with WebChat but should work with messaging. It assumes the botName is in the pre engagement data so this would need refactoring. You could either work out the botName from the Twilio number or you could add it as a query parameter to the webhook integration url which would then be available in the event payload of the inbound chat handler webhook.
+
+- Will this work with Flex Conversations?
+
+  The POC implementation was developed for Programmable Chat and wouldn't work with Flex Conversations. The basic architecture is still valid but the specific api request and configuration would beed to be changed. For example:
+
+  - Flex Flows -> Flex Conversations: Adds a webhook to the conversation and this would point to an equivalent function to the inbound chat message handler
+  - Inbound chat message handler: Modify the code to use the conversation sid as the Bot session id rather than channel sid.
+  - Outbound chat message handler: To close the chat you would update the conversations state to 'closed' rather than updating the chat channel attributes. For sending to an agent you would remove the webhook but rather than creating a task use the [Interactions API ](https://www.twilio.com/docs/flex/developer/conversations/interactions-api/interactions#customer-initiated-sms-contact) to send the conversation to an agent.
 
 ## Sequence Diagram
 

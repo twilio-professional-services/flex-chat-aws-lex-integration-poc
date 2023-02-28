@@ -40,7 +40,6 @@ const postBotReply = async (botReply) => {
 };
 
 export const handler = async (event) => {
-  console.log("running", event);
   const messages = event.Records;
   // sqs configured for 1 message per trigger
   const message = messages[0];
