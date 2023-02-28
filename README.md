@@ -1,4 +1,4 @@
-# Flex WebChat integration to AWS Lex
+# Flex WebChat Integration to AWS Lex
 
 # WORK IN PROGRESS - Option 2 has the code and diagram but needs overview and setup write up
 
@@ -106,6 +106,7 @@ TODO
 - Start in Studio and then switch to BOT?
 - Other options rather than 2 Lambda and SQS? Yep - could just point webhook to a lambda that combines the functionality of the two twilio functions and two lambdas which would be simpler. This documented approach breaks out the logic and handles Lex blocking.
 - endpoint security
+- How to migrate this POC to Flex Conversations
 
 ## Sequence Diagram
 
