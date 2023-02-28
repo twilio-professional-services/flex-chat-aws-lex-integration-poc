@@ -5,13 +5,8 @@ import {
 import axios from "axios";
 
 const config = {
-  region: "us-east-1",
+  region: process.env.AWS_REGION,
 };
-
-// Temporary hard coded value for POC
-// Set to the Twilio Functions service domain name and path after deploying the lex-serverless-webhook service
-const twilioOutboundChatEndpoint =
-  "https://xxx.twil.io/outboundChatMessageHandler";
 
 const parseCustomerBotMesssageFromSQS = (message) => {
   const customerBotMessage = {
@@ -36,6 +31,7 @@ const buildRecognizeCommand = (text, sessionId, botAliasId, botId) => {
 };
 
 const postBotReply = async (botReply) => {
+  const twilioOutboundChatEndpoint = process.env.TWILIO_OUTBOUND_CHAT_ENDPOINT;
   try {
     await axios.post(twilioOutboundChatEndpoint, botReply);
   } catch (error) {

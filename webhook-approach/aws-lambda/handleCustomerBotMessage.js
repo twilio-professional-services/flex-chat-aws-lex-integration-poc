@@ -1,18 +1,19 @@
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
 
-// Temporary hard coded values for POC
-const OrderFlowersBotIds = { botAliasId: "TSTALIASID", botId: "ZHHHA7H8FQ" };
-const queueUrl =
-  "https://sqs.us-east-1.amazonaws.com/658438689449/inboundCustomerBotMessages";
+const defaultBotIds = {
+  botAliasId: process.env.DEFAULT_BOT_ALIAS_ID,
+  botId: process.env.DEFAULT_BOT_ID,
+};
+const queueUrl = process.env.QUEUE_URL;
 
 const botIdsFromBotName = (botName) => {
   // in practice this would map botName to required Ids
-  return OrderFlowersBotIds;
+  return defaultBotIds;
 };
 
 export const handler = async (event) => {
   const config = {
-    region: "us-east-1",
+    region: process.env.AWS_REGION,
   };
   console.log(event.body);
   const { customerMessage, botName, sessionId } = JSON.parse(event.body);
@@ -42,7 +43,7 @@ export const handler = async (event) => {
   // add message to SQS queue
   const client = new SQSClient(config);
   const command = new SendMessageCommand(input);
-  const sqsResponse = await client.send(command);
+  await client.send(command);
 
   const response = {
     statusCode: 200,
