@@ -1,0 +1,93 @@
+title Flex WebChat Lex Integration
+actor Customer
+participant Flex WebChat as WebChat
+participant Flex API\n(create identity,\ntoken and\nchat channel) as FlexAPI
+participant Flex Flow\n(mapping to\nwebhook config) as FlexFlow
+participant Chat Channel as ChatChannel
+participant InboundChatMsgHandler\n(Twilio serveless function) as InboundChatMsgHandler
+participant InboundBotMsgHandler\n(AWS lambda) as InboundBotMsgHandler
+participant InboundBotMsgSQS\n(AWS simple\nqueue service) as InboundBotMsgSQS
+participant ProcessBotMsgTurn\n(AWS lambda) as ProcessBotMsgTurn
+participant Amazon Lex\n(AWS nlu) as AmazonLex
+participant OutboundChatMsgHandler\n(Twilio serveless function) as OutboundChatMsgHandler
+participant TaskRouter as TaskRouter
+participant Flex UI as FlexUI
+actor Agent
+
+seq Init WebChat
+Customer->WebChat: Start WebChat
+WebChat->FlexAPI: Create Flex WebChat\n(bot name in pre engagement)
+FlexAPI->FlexFlow: Fetch integration/webhook details
+FlexFlow->FlexAPI: Return new message webhook
+FlexAPI->ChatChannel: Create new channel\n(Bot name added to channel attributes)
+ChatChannel->FlexAPI: Return CHxxx/Channel 
+FlexAPI->WebChat: Token and channel returned
+WebChat->ChatChannel: Join channel (via chat sdk)
+WebChat->Customer: How can we help?
+end
+
+destroy FlexAPI
+destroy FlexFlow
+
+seq Customer message and bot response for unrecognized message
+Customer->WebChat: Help
+WebChat->ChatChannel: Customer Message\n(add to channel via chat sdk)
+ChatChannel->InboundChatMsgHandler: Customer Message\n(chat webhook)
+note over InboundChatMsgHandler: Fetch BotName from\nchat channel pre engagement\nand send message to bot
+InboundChatMsgHandler->InboundBotMsgHandler: HTTP Post payload:\nCustomer Message\nBotName\nChannelSid as sessionId
+note over InboundBotMsgHandler: Lookup Lex Bot Alias from\nBotName and enqueue to sqs
+InboundBotMsgHandler->InboundBotMsgSQS: SQS Message Payload:\nLex Bot Alias\nMessage\nSessionId
+parallel{
+InboundBotMsgHandler-->InboundChatMsgHandler: OK - Message queued to Bot
+InboundChatMsgHandler-->ChatChannel: OK
+}
+InboundBotMsgSQS->+ProcessBotMsgTurn: SQS Message\n(sqs trigger starts lambda)
+note over ProcessBotMsgTurn: Build Lex recognizeTextCommand
+ProcessBotMsgTurn->+AmazonLex: recognizeTextCommand\n(via aws lex runtime sdk)
+AmazonLex-->-ProcessBotMsgTurn: Lex response:\nBot Reply Message\nIntent\nState (fulfilled or in progress)
+note over ProcessBotMsgTurn: Pass Lex Response to OrderFlower function\nBased on intent and fulfilled state\npost bot reply message and nextStep
+ProcessBotMsgTurn->-OutboundChatMsgHandler: HTTP Post payload:\nBot Reply Message\nSessionId/Channel Sid\nNextStep [WAIT_FOR_MESSAGE | CLOSE_CHAT | AGENT]
+OutboundChatMsgHandler->ChatChannel: Add bot reply to Chat Channel\n(added via chat REST API)
+ChatChannel->WebChat: Bot reply message\n(via chat sdk)
+WebChat->Customer: Order Flowers or speak to agent
+end
+
+seq Customer message and bot response for SendToAgent
+Customer->WebChat: Speak to an agent pleast
+WebChat->ChatChannel: Customer Message\n(add to channel via chat sdk)
+ChatChannel->InboundChatMsgHandler: Customer Message\n(chat webhook)
+note over InboundChatMsgHandler: Fetch BotName from\nchat channel pre engagement\nand send message to bot
+InboundChatMsgHandler->InboundBotMsgHandler: HTTP Post payload:\nCustomer Message\nBotName\nChannelSid as sessionId
+note over InboundBotMsgHandler: Lookup Lex Bot Alias from\nBotName and enqueue to sqs
+InboundBotMsgHandler->InboundBotMsgSQS: SQS Message Payload:\nLex Bot Alias\nMessage\nSessionId
+parallel{
+InboundBotMsgHandler-->InboundChatMsgHandler: OK - Message queued to Bot
+InboundChatMsgHandler-->ChatChannel: OK
+}
+InboundBotMsgSQS->+ProcessBotMsgTurn: SQS Message\n(sqs trigger starts lambda)
+note over ProcessBotMsgTurn: Build Lex recognizeTextCommand
+ProcessBotMsgTurn->+AmazonLex: recognizeTextCommand\n(via aws lex runtime sdk)
+AmazonLex-->-ProcessBotMsgTurn: Lex response:\nBot Reply Message\nIntent\nState (fulfilled or in progress)
+note over ProcessBotMsgTurn: Pass Lex Response to OrderFlower function\nBased on intent and fulfilled state\npost bot reply message and nextStep
+ProcessBotMsgTurn->-OutboundChatMsgHandler: HTTP Post payload:\nBot Reply Message\nSessionId/Channel Sid\nNextStep [WAIT_FOR_MESSAGE | CLOSE_CHAT | AGENT]
+OutboundChatMsgHandler->ChatChannel: Add bot reply to Chat Channel\n(added via chat REST API)
+destroy InboundChatMsgHandler
+destroy InboundBotMsgHandler
+destroy InboundBotMsgSQS
+destroy ProcessBotMsgTurn
+destroy AmazonLex
+note over OutboundChatMsgHandler: Remove chat webhook so that new\nmessages from customer go to agent\nand not bot
+ChatChannel->WebChat: Bot reply message\n(via chat sdk)
+WebChat->Customer: Getting you an agent now
+OutboundChatMsgHandler->TaskRouter: Create Chat Task\n(via taskrouter API)
+destroy OutboundChatMsgHandler
+TaskRouter->FlexUI: Reservation to agent\n(via taskrouter sdk)
+FlexUI->ChatChannel: Agent joins chat\n(via chat sdk)
+Agent->FlexUI: How can I help
+FlexUI->ChatChannel: Agent messages customer\n(via chat sdk)
+ChatChannel->WebChat: Agent message passed to customer\n(via chat sdk)
+WebChat->Customer: How can I help
+
+end
+
+

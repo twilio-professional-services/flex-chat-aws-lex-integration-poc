@@ -1,5 +1,9 @@
 # Flex WebChat integration to AWS Lex
 
+# WORK IN PROGRESS - Option 2 has the code and diagram but needs overview and setup write up
+
+![Work In Progress](readme-images/WorkInProgress.png)
+
 ## Disclaimer
 
 **This software is to be considered "sample code", a Type B Deliverable, and is delivered "as-is" to the user. Twilio bears no responsibility to support the use or implementation of this software.**
@@ -48,7 +52,7 @@ messages.[0].content (we assume only 1 message per turn)
 sessionState.intent.slots
 ```
 
-![Intent Setup](screenshots/Intents.png)
+![Intent Setup](readme-images/Intents.png)
 
 # Option 1 - Studio Integration
 
@@ -77,7 +81,7 @@ https://demo.flex.twilio.com/chat?accountSid=ACxxx&flexFlowSid=FOxxx
 
 Note you will need to add in your account sid and the Flex Flow Sid that is pointing to the Studio Flow deployed above.
 
-![Demo WebChat](screenshots/DemoWebChat.png)
+![Demo WebChat](readme-images/DemoWebChat.png)
 
 ## Suggested improvements to the solution
 
@@ -88,3 +92,21 @@ Whilst the Twilio Functions could be replaced using another form of endpoint (AW
 The Studio Flow is looking for specific intent names and this could be argued as being tightly coupled with the Lex implementation which also drives us to design decisions shown in option 2.
 
 # Option 2 - Webhook Integration
+
+## Overview
+
+TODO
+
+## Setup
+
+TODO
+
+## Other Considerations - TODO
+
+- Start in Studio and then switch to BOT?
+- Other options rather than 2 Lambda and SQS? Yep - could just point webhook to a lambda that combines the functionality of the two twilio functions and two lambdas which would be simpler. This documented approach breaks out the logic and handles Lex blocking.
+- endpoint security
+
+## Sequence Diagram
+
+![Sequence Diagram](readme-images/Flex-WebChat-Lex-Integration.png)
