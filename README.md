@@ -4,7 +4,7 @@
 
 **This software is to be considered "sample code", a Type B Deliverable, and is delivered "as-is" to the user. Twilio bears no responsibility to support the use or implementation of this software.**
 
-## This POC Supports Flex UI V1/Legacy Flex Chat using Programmable Chat
+## Supports Flex UI V1/Legacy Flex Chat using Programmable Chat
 
 **For Flex Conversations the general patterns will still apply but the studio trigger examples and API requests would need changing for Flex Conversations. See the 'other considerations' section for details**
 
@@ -109,8 +109,32 @@ Note that the HTTP post to the outbound chat message handler has a nextStep para
 ```
 
 ## Setup
+1. Setup you Bot as described above to extend the OrderFlowers AWS Lex blueprint and note the Bot Id and the Bot Alias Id of the deployed Bot
 
-TODO
+   (If you are working with an existing Bot the solution should work as expected but you will have to update the AWS Lanmbda that processes the Bot response and map the Lex Intent to a suitable nextAction that is sent to the outbound chat message handler)
+2. Add a standard AWS SQS via the console and name it 'inboundCustomerBotMessages' and note down the URL for the queue (https://sqs.region.accountid/queueName)
+3. Add an AWS Lambda called handleCustomerBotMessage and add the code from [here](webhook-approach/aws-lambda/handleCustomerBotMessage.js)
+
+   + Configuration -> Permissions: Add SQS Full access and SQS Queue Execution Privileges to the Lambdas role
+   + Configuration -> Environment Variables: Add QUEUE_URL (use the SQS queue from above), DEFAULT_BOT_ID, DEFAULT_BOT_ALIAS_ID
+   + Configuration -> Function Url: Create a public url for the function (note security considerations covered later in this repo) and note the url down
+4. Deploy Twilio Serverless from the webhook-approach/serverless directory
+
+   + Copy the .env-template to .env and update the Twilio sids
+   + Set the bot post message url to be the function url in step 3
+   + twilio serverless:deploy the service and note the domain that is created when deployed
+
+5. Add an AWS Lambda called processCustomerBotMessagesFromSQS from [here](webhook-approach/aws-lambda//processCustomerBotMessageFromSQS.js)
+
+   + Configuration -> Permissions: Add SQS Execute, Lex ReadOnly/Full/RunBotsOnly permissions policy to the Lambdas role
+   + Configuration -> Environment Variables: Add TWILIO_OUTBOUND_CHAT_ENDPOINT which will be the deployed domain in step 4 https://xxx.twil.io/outboundChatMessageHandler
+   + Configuration -> Triggers: Add the SQS Queue and set the batch size to 1
+   + Configuration -> General Configuration: Increase the timeout to allow for Lex processing (30 seconds or as appropriate for your Bot use case)
+
+6. Create a Flex Flow mapped to the Twilio Function inboundChatMessageHandler
+
+   + Twilio Console -> Flex -> Messaging -> Legacy Addresses -> Create New Address: Create a WebChat address with integration type Webhook and point it to the deployed domain in step 4 https://xxx.twil.io/inboundChatMessageHandler  
+
 
 ## Test it out!
 
