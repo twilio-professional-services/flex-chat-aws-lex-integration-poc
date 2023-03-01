@@ -130,6 +130,7 @@ Note that the nextStep parameter provided in the HTTP post to the outbound chat 
    + Configuration -> Environment Variables: Add TWILIO_OUTBOUND_CHAT_ENDPOINT which will be the deployed domain in step 4 https://xxx.twil.io/outboundChatMessageHandler
    + Configuration -> Triggers: Add the SQS Queue and set the batch size to 1
    + Configuration -> General Configuration: Increase the timeout to allow for Lex processing (30 seconds or as appropriate for your Bot use case)
+   + Add a [Lambda Layer](https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html) to support the import of axios. An example of this is covered [here](https://stackoverflow.com/questions/48356841/how-can-i-use-axios-in-lambda).
 
 6. Create a Flex Flow mapped to the Twilio Function inboundChatMessageHandler
 
@@ -152,12 +153,12 @@ We are passing in the botName as a url query parameter and this url is passed as
 
 - Does option 2 require AWS Lambdas and SQS?
 
-  The key takeaway for option 2 is the async approach to receiving messages from the customer and replying with Bot responses and the seperation of message vs bot logic. The AWS Lambda and SQS configuration is just one way to achieve this. For example if you were confident that your Bot responses would be within the 5 second Programmable Chat you could in theory cram all of the functionality from the two Twilio Functions and two Lambdas into one Lambda which would block waiting for a response from the Bot.
-  In some use cases this may be a good option for some customers looking to deploy a simple POC.
+  The key takeaway for option 2 is the async approach to receiving messages from the customer and replying with Bot responses and the seperation of Flex programmable Chat Messages vs bot logic. The AWS Lambda and SQS configuration is just one way to achieve this. For example if you were confident that your Bot responses would be within the 5 second Programmable Chat Webhook timeout you could in theory cram all of the functionality from the two Twilio Functions and two Lambdas into one Lambda which would block waiting for a response from the Bot.
+  In some use cases this may be a good option for customers looking to deploy a simple POC.
 
 - Is this very secure?
 
-  No - in the interest of keeping the POC implementation simple the AWS Lambda is a public url rather than API gateway and the public Twilio Function for outbound chat message handling has no mechanism to check where the request came from. The inbound chat message handler is marked as protected so this is secure in that it would need to be invoked by a Twilio Webhook.
+  No - in the interest of keeping the POC implementation simple the AWS Lambda is a public url rather than behind an API gateway endpoint and the public Twilio Function for outbound chat message handling has no mechanism to authenticate the request. The inbound chat message handler is marked as protected so this is secure in that it would need to be invoked by a Twilio Webhook.
   https://www.twilio.com/docs/serverless/functions-assets/visibility#protected
   https://www.twilio.com/docs/serverless/functions-assets/quickstart/basic-auth
   https://docs.aws.amazon.com/lambda/latest/dg/services-apigateway.html
