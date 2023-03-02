@@ -1,4 +1,4 @@
-# Flex WebChat Integration to AWS Lex
+# Flex Chat Integration to AWS Lex
 
 ## Disclaimer
 
@@ -14,7 +14,7 @@ Option 1 uses a Studio Flow combined with Twilio Functions approach and option 2
 
 Option 1 is self-contained within Twilio (Twilio Functions, Studio and Lex via AWS lex runtime sdk) whereas option 2 provides a more generic solution that splits the Programmable Chat Channel interaction implemented in Twilio and the Bot specific handling within AWS.
 
-Options 1 and 2 used Programmable Chat and option 3 describes an implementation using Flex Conversations. Option 3 would require the Flex UI version to be 2.x 
+Options 1 and 2 used Programmable Chat and option 3 describes an implementation using Flex Conversations. Option 3 would require the Flex UI version to be 2.x
 
 # AWS Lex OrderFlowers Bot Setup
 
@@ -91,7 +91,7 @@ The Studio Flow is looking for specific intent names and this could be argued as
 
 In option 1 using Studio we had a solution that would invoke a function that would execute until the bot responded and would then pass the raw response back to the Studio Flow. To ensure that function invocation time is kept to a minimum and to decouple the Twilio/Flex side of things from the Bot internals option 2 uses an async message approach and seperates Programmable Chat Channel handling from Bot handling.
 
-A [Flex Flow with a webhook integration](https://www.twilio.com/docs/flex/developer/messaging/manage-flows#external-webhookhttp-request-widget) is first configured which will be triggered for all new messages from the customer. This webhook will send a webhook with the Channel sid and Message body to a Twilio Function [inboundChatMessageHandler](webhook-approach/serverless/functions/inboundChatMessageHandler.protected.js). This inbound message handler reads the channels attributes to get the bot name from the pre engagement data,  it then does a HTTP post to an AWS Lambda which includes the message body, Programmable Chat Channel Sid which the Bot will use as a session id and the bot name.
+A [Flex Flow with a webhook integration](https://www.twilio.com/docs/flex/developer/messaging/manage-flows#external-webhookhttp-request-widget) is first configured which will be triggered for all new messages from the customer. This webhook will send a webhook with the Channel sid and Message body to a Twilio Function [inboundChatMessageHandler](webhook-approach/serverless/functions/inboundChatMessageHandler.protected.js). This inbound message handler reads the channels attributes to get the bot name from the pre engagement data, it then does a HTTP post to an AWS Lambda which includes the message body, Programmable Chat Channel Sid which the Bot will use as a session id and the bot name.
 
 The HTTP post from the inbound message webhook handler goes to the AWS Lambda [handleCustomerBotMessage](webhook-approach/aws-lambda/handleCustomerBotMessage.js). The Lambda just takes the bot name, message and channel/session id and enqueues it into an AWS Simple Queue Service ([SQS](https://aws.amazon.com/sqs/)). The Lambda then responds with an OK which terminates the inbound message handler Twilio function which ensures that it quickly responds to the Programmable Chat onMessageAdded event webhook without waiting for the bot response.
 
@@ -107,33 +107,35 @@ Note that the nextStep parameter provided in the HTTP post to the outbound chat 
 ```
 
 ## Setup
+
 1. Setup you Bot as described above to extend the OrderFlowers AWS Lex blueprint and note the Bot Id and the Bot Alias Id of the deployed Bot
 
    (If you are working with an existing Bot the solution should work as expected but you will have to update the AWS Lanmbda that processes the Bot response and map the Lex Intent to a suitable nextAction that is sent to the outbound chat message handler)
+
 2. Add a standard AWS SQS via the console and name it 'inboundCustomerBotMessages' and note down the URL for the queue (https://sqs.region.accountid/queueName)
 3. Add an AWS Lambda called handleCustomerBotMessage and add the code from [here](webhook-approach/aws-lambda/handleCustomerBotMessage.js)
 
-   + Configuration -> Permissions: Add SQS Full access and SQS Queue Execution Privileges to the Lambdas role
-   + Configuration -> Environment Variables: Add QUEUE_URL (use the SQS queue from above), DEFAULT_BOT_ID, DEFAULT_BOT_ALIAS_ID
-   + Configuration -> Function Url: Create a public url for the function (note security considerations covered later in this repo) and note the url down
+   - Configuration -> Permissions: Add SQS Full access and SQS Queue Execution Privileges to the Lambdas role
+   - Configuration -> Environment Variables: Add QUEUE_URL (use the SQS queue from above), DEFAULT_BOT_ID, DEFAULT_BOT_ALIAS_ID
+   - Configuration -> Function Url: Create a public url for the function (note security considerations covered later in this repo) and note the url down
+
 4. Deploy Twilio Serverless from the webhook-approach/serverless directory
 
-   + Copy the .env-template to .env and update the Twilio sids
-   + Set the bot post message url to be the function url in step 3
-   + twilio serverless:deploy the service and note the domain that is created when deployed
+   - Copy the .env-template to .env and update the Twilio sids
+   - Set the bot post message url to be the function url in step 3
+   - twilio serverless:deploy the service and note the domain that is created when deployed
 
 5. Add an AWS Lambda called processCustomerBotMessagesFromSQS from [here](webhook-approach/aws-lambda//processCustomerBotMessageFromSQS.js)
 
-   + Configuration -> Permissions: Add SQS Execute, Lex ReadOnly/Full/RunBotsOnly permissions policy to the Lambdas role
-   + Configuration -> Environment Variables: Add TWILIO_OUTBOUND_CHAT_ENDPOINT which will be the deployed domain in step 4 https://xxx.twil.io/outboundChatMessageHandler
-   + Configuration -> Triggers: Add the SQS Queue and set the batch size to 1
-   + Configuration -> General Configuration: Increase the timeout to allow for Lex processing (30 seconds or as appropriate for your Bot use case)
-   + Add a [Lambda Layer](https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html) to support the import of axios. An example of this is covered [here](https://stackoverflow.com/questions/48356841/how-can-i-use-axios-in-lambda).
+   - Configuration -> Permissions: Add SQS Execute, Lex ReadOnly/Full/RunBotsOnly permissions policy to the Lambdas role
+   - Configuration -> Environment Variables: Add TWILIO_OUTBOUND_CHAT_ENDPOINT which will be the deployed domain in step 4 https://xxx.twil.io/outboundChatMessageHandler
+   - Configuration -> Triggers: Add the SQS Queue and set the batch size to 1
+   - Configuration -> General Configuration: Increase the timeout to allow for Lex processing (30 seconds or as appropriate for your Bot use case)
+   - Add a [Lambda Layer](https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html) to support the import of axios. An example of this is covered [here](https://stackoverflow.com/questions/48356841/how-can-i-use-axios-in-lambda).
 
 6. Create a Flex Flow mapped to the Twilio Function inboundChatMessageHandler
 
-   + Twilio Console -> Flex -> Messaging -> Legacy Addresses -> Create New Address: Create a WebChat address with integration type Webhook and point it to the deployed domain in step 4 https://xxx.twil.io/inboundChatMessageHandler  
-
+   - Twilio Console -> Flex -> Messaging -> Legacy Addresses -> Create New Address: Create a WebChat address with integration type Webhook and point it to the deployed domain in step 4 https://xxx.twil.io/inboundChatMessageHandler
 
 ## Test it out!
 
@@ -151,7 +153,7 @@ We are passing in the botName as a url query parameter and this url is passed as
 
 - Does option 2 require AWS Lambdas and SQS?
 
-  The key takeaway for option 2 is the async approach to receiving messages from the customer and replying with Bot responses and the seperation of Flex programmable Chat Messages vs bot logic. The AWS Lambda and SQS configuration is just one way to achieve this. Option 3 is an example of implementing receiving the message webhook, sending to Lex and adding a reply to conversation all from within one Lambda. 
+  The key takeaway for option 2 is the async approach to receiving messages from the customer and replying with Bot responses and the seperation of Flex programmable Chat Messages vs bot logic. The AWS Lambda and SQS configuration is just one way to achieve this. Option 3 is an example of implementing receiving the message webhook, sending to Lex and adding a reply to conversation all from within one Lambda.
 
 - Is this very secure?
 
@@ -180,5 +182,20 @@ We are passing in the botName as a url query parameter and this url is passed as
 
 ## Overview
 
+In this example we setup a Flex Conversation address for a number or webchat address to an endpoint on the AWS Gateway that looks like: https://xxx.execute-api.region.amazonaws.com/prod/lex-flex-conversations?BotId=xxx&BotAliasId=yyy
+
+The API Gateway is configured for an asynchronous invocation of the backend Lambda [function](conversations-approach/aws-lambda/lex-flex-conversations.js). This ensures that we respond to the Conversation webhook immediately and don't block waiting for Lex.
+
+Within the Lambda it has eveything it needs from the webhook query string params and payload to select the correct Bot and pass the message to Lex and add the Bot response to the Conversation via REST API.
+
+It uses the same logic as the other options to either close the chat if the intent is Fulfilled or send to a Flex agent if the agent intent is detected.
+
+With Conversations the Conversation is closed via an API update to conversation.state = 'closed' and to send to an agent the Interaction API is used.
+
+## Resources
+
+- Flex Conversations Address: https://www.twilio.com/docs/flex/admin-guide/setup/conversations/overview-of-address-management
+- Update Conversation: https://www.twilio.com/docs/conversations/api/conversation-resource#update-conversation
+- Interactions: Customer-initiated SMS Contact https://www.twilio.com/docs/flex/developer/conversations/interactions-api/interactions#customer-initiated-sms-contact
 
 ## Setup
