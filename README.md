@@ -4,19 +4,17 @@
 
 **This software is to be considered "sample code", a Type B Deliverable, and is delivered "as-is" to the user. Twilio bears no responsibility to support the use or implementation of this software.**
 
-## Supports Flex UI V1/Legacy Flex Chat using Programmable Chat
-
-**For Flex Conversations the general patterns will still apply but the studio trigger examples and API requests would need changing for Flex Conversations. See the 'other considerations' section for details**
-
 # Overview
 
-This repo describes a couple of options on how to integrate Flex WebChat into AWS Lex and provides POC code for Twilio serverless Functions, AWS Lambdas and a Studio Flow.
+This repo describes options on how to integrate Flex Chat into AWS Lex and provides POC code for Twilio serverless Functions, AWS Lambdas and a Studio Flow.
 
 After describing how to extend the AWS Lex 'Order Flowers' sample bot to include intent indicating 'Chat to Agent' we cover how to integrate the Twilio Flex WebChat widget with Lex.
 
 Option 1 uses a Studio Flow combined with Twilio Functions approach and option 2 describes setting a Flex Flow to point to a Twilio Function and bypassing Studio.
 
 Option 1 is self-contained within Twilio (Twilio Functions, Studio and Lex via AWS lex runtime sdk) whereas option 2 provides a more generic solution that splits the Programmable Chat Channel interaction implemented in Twilio and the Bot specific handling within AWS.
+
+Options 1 and 2 used Programmable Chat and option 3 describes an implementation using Flex Conversations. Option 3 would require the Flex UI version to be 2.x 
 
 # AWS Lex OrderFlowers Bot Setup
 
@@ -87,7 +85,7 @@ Whilst the Twilio Functions could be replaced using another form of endpoint (AW
 
 The Studio Flow is looking for specific intent names and this could be argued as being tightly coupled with the Lex implementation which also drives us to design decisions shown in option 2.
 
-# Option 2 - Webhook Integration
+# Option 2 - Programmable Chat and Webhook Integration
 
 ## Overview
 
@@ -153,12 +151,11 @@ We are passing in the botName as a url query parameter and this url is passed as
 
 - Does option 2 require AWS Lambdas and SQS?
 
-  The key takeaway for option 2 is the async approach to receiving messages from the customer and replying with Bot responses and the seperation of Flex programmable Chat Messages vs bot logic. The AWS Lambda and SQS configuration is just one way to achieve this. For example if you were confident that your Bot responses would be within the 5 second Programmable Chat Webhook timeout you could in theory cram all of the functionality from the two Twilio Functions and two Lambdas into one Lambda which would block waiting for a response from the Bot.
-  In some use cases this may be a good option for customers looking to deploy a simple POC.
+  The key takeaway for option 2 is the async approach to receiving messages from the customer and replying with Bot responses and the seperation of Flex programmable Chat Messages vs bot logic. The AWS Lambda and SQS configuration is just one way to achieve this. Option 3 is an example of implementing receiving the message webhook, sending to Lex and adding a reply to conversation all from within one Lambda. 
 
 - Is this very secure?
 
-  No - in the interest of keeping the POC implementation simple the AWS Lambda is a public url rather than behind an API gateway endpoint and the public Twilio Function for outbound chat message handling has no mechanism to authenticate the request. The inbound chat message handler is marked as protected so this is secure in that it would need to be invoked by a Twilio Webhook.
+  No - in the interest of keeping the POC implementation simple the AWS Lambda is a public url rather than behind an API gateway endpoint and the public Twilio Function for outbound chat message handling has no mechanism to authenticate the request. The inbound chat message handler is marked as protected so this is secure in that it would need to be invoked by a Twilio Webhook. Option 3 provides an example of validating the webhook came from Twilio.
   https://www.twilio.com/docs/serverless/functions-assets/visibility#protected
   https://www.twilio.com/docs/serverless/functions-assets/quickstart/basic-auth
   https://docs.aws.amazon.com/lambda/latest/dg/services-apigateway.html
@@ -178,3 +175,10 @@ We are passing in the botName as a url query parameter and this url is passed as
 ## Sequence Diagram
 
 ![Sequence Diagram](readme-images/Flex-WebChat-Lex-Integration.png)
+
+# Option 3 - Flex Conversations and Webhook Integration
+
+## Overview
+
+
+## Setup
