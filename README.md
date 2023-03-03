@@ -16,6 +16,10 @@ Option 1 is self-contained within Twilio (Twilio Functions, Studio and Lex via A
 
 Options 1 and 2 used Programmable Chat and option 3 describes an implementation using Flex Conversations. Option 3 would require the Flex UI version to be 2.x
 
+- [Option 1 - Studio Integration](#option-1---studio-integration)
+- [Option 2 - Programmable Chat and Webhook Integration](#option-2---programmable-chat-and-webhook-integration)
+- [Option 3 - Flex Conversations and Webhook Integration](#option-3---flex-conversations-and-webhook-integration)
+
 # AWS Lex OrderFlowers Bot Setup
 
 This repo builds on the [OrderFlowers sample](https://docs.aws.amazon.com/lex/latest/dg/gs-bp.html). After building the sample bot and testing it out you can extend it as follows:
@@ -190,7 +194,7 @@ Within the Lambda it has eveything it needs from the webhook query string params
 
 It uses the same logic as the other options to either close the chat if the intent is Fulfilled or send to a Flex agent if the agent intent is detected.
 
-With Conversations the Conversation is closed via an API update to conversation.state = 'closed' and to send to an agent the Interaction API is used.
+With Conversations the Conversation is closed via an API update to conversation.state = 'closed' and to send to an agent the Interaction API is used and the webhook that points to the Lambda is removed.
 
 ## Resources
 
@@ -201,20 +205,22 @@ With Conversations the Conversation is closed via an API update to conversation.
 
 ## Setup
 
-+ To leverage the Twilio node helper library from AWS a [Layer](https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html) is required. You can follow the steps in this [blog](https://www.twilio.com/blog/aws-lambda-layers-node-js-twilio-sms) up until you have completed the 'Create an AWS Lambda Layer'.
+- Setup you Bot as described above to extend the OrderFlowers AWS Lex blueprint and note the Bot Id and the Bot Alias Id of the deployed Bot
 
-+ Create Lambda function
+- To leverage the Twilio node helper library from AWS a [Layer](https://docs.aws.amazon.com/lambda/latest/dg/configuration-layers.html) is required. You can follow the steps in this [blog](https://www.twilio.com/blog/aws-lambda-layers-node-js-twilio-sms) up until you have completed the 'Create an AWS Lambda Layer'.
 
-   - Configuration -> Permissions: Lex ReadOnly/Full/RunBotsOnly permissions policy to the Lambdas role
-   - Configuration -> Environment Variables: Add TWILIO_AUTH_TOKEN (primary auth token is required for webhook validation), FLEX_WORKFLOW_SID, FLEX_WORKSPACE_SID. Note that there is a BotId added to the TaskRouter task parameters but for POC the TaskRouter Workflow will need to ensure it routes a task to the test agent. The Assign to Anyone workflow would be sufficient for a test account with one developer.
-   - Configuration -> General Configuration: Increase the timeout to allow for Lex processing (30 seconds or as appropriate for your Bot use case)
-   - Add the Layer with the Twilio node helper library created above
+- Create Lambda function
 
-+ API Gateway Configuration
+  - Configuration -> Permissions: Lex ReadOnly/Full/RunBotsOnly permissions policy to the Lambdas role
+  - Configuration -> Environment Variables: Add TWILIO_AUTH_TOKEN (primary auth token is required for webhook validation), FLEX_WORKFLOW_SID, FLEX_WORKSPACE_SID. Note that there is a BotId added to the TaskRouter task parameters but for POC the TaskRouter Workflow will need to ensure it routes a task to the test agent. The Assign to Anyone workflow would be sufficient for a test account with one developer.
+  - Configuration -> General Configuration: Increase the timeout to allow for Lex processing (30 seconds or as appropriate for your Bot use case)
+  - Add the Layer with the Twilio node helper library created above
 
-   - Configure a resource to handle the Webhook POST request from the conversations webhook and trigger the Lambda
-   - Add the 'X-Amz-Invocation-Type' = "Event" to the Integration Request for the method execution as described [here](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-integration-async.html). This ensure the Lambda is invoked async and responds immediately to the webhook
-   - To ensure the header and body are mapped correctly for the Lambda to validate the [webhook originated from your Twilio account](https://www.twilio.com/docs/usage/webhooks/webhooks-security#validating-signatures-from-twilio) a mapping template is required on the Integration Request for the content-type 'application/x-www-formurlencoded'. Mapping templates are described [here](https://docs.aws.amazon.com/apigateway/latest/developerguide/models-mappings.html). A suitable Velocity Template Language (VTL) that can be used is [here](conversations-approach/api-gateway/lex-flex-conversations-vtl-mapping.vtl)
-   - Deploy the API and note down the required url
+- API Gateway Configuration
 
-+ Configure a Flex Conversation Address. Ensure the url is in this format and includes the BotId and then the BotAliasId: https://xxx.execute-api.region.amazonaws.com/prod/lex-flex-conversations?BotId=xxx&BotAliasId=yyy. This format and order of query string params are expected during webhook signature validation.
+  - Configure a resource to handle the Webhook POST request from the conversations webhook and trigger the Lambda
+  - Add the 'X-Amz-Invocation-Type' = "Event" to the Integration Request for the method execution as described [here](https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-integration-async.html). This ensure the Lambda is invoked async and responds immediately to the webhook
+  - To ensure the header and body are mapped correctly for the Lambda to validate the [webhook originated from your Twilio account](https://www.twilio.com/docs/usage/webhooks/webhooks-security#validating-signatures-from-twilio) a mapping template is required on the Integration Request for the content-type 'application/x-www-formurlencoded'. Mapping templates are described [here](https://docs.aws.amazon.com/apigateway/latest/developerguide/models-mappings.html). A suitable Velocity Template Language (VTL) that can be used is [here](conversations-approach/api-gateway/lex-flex-conversations-vtl-mapping.vtl)
+  - Deploy the API and note down the required url
+
+- Configure a Flex Conversation Address. Ensure the url is in this format and includes the BotId and then the BotAliasId: https://xxx.execute-api.region.amazonaws.com/prod/lex-flex-conversations?BotId=xxx&BotAliasId=yyy. This order of query string params are expected during webhook signature validation.

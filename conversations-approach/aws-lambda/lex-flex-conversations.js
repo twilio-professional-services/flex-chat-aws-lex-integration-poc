@@ -75,7 +75,8 @@ const sendToFlex = async (
   conversationSid,
   botId,
   from,
-  webhookSid
+  webhookSid,
+  source
 ) => {
   const twilioClient = twilio(accountSid, process.env.TWILIO_AUTH_TOKEN);
 
@@ -84,12 +85,14 @@ const sendToFlex = async (
     .webhooks(webhookSid)
     .remove();
 
+  const chatChannelType = source === "SMS" ? "sms" : "chat";
+
   // TODO - revisit and handle webchat and other channels
   // create an interaction to send to Flex via TaskRouter
   // for POC purposes just add the BotId to the attributes so it could be used for routing
   await twilioClient.flexApi.v1.interaction.create({
     channel: {
-      type: "sms",
+      type: chatChannelType,
       initiated_by: "customer",
       properties: { media_channel_sid: conversationSid },
     },
@@ -97,7 +100,7 @@ const sendToFlex = async (
       properties: {
         workspace_sid: process.env.FLEX_WORKSPACE_SID,
         workflow_sid: process.env.FLEX_WORKFLOW_SID,
-        task_channel_unique_name: "sms",
+        task_channel_unique_name: chatChannelType,
         attributes: {
           from,
           botId,
@@ -107,11 +110,49 @@ const sendToFlex = async (
   });
 };
 
+const getFriendlyNameFromPreEngagementData = async (
+  accountSid,
+  conversationSid
+) => {
+  // we assume that as this is not an sms message that it came from the Twilio React WebChat app that has the friendly name in the conversation attribtues
+
+  const twilioClient = twilio(accountSid, process.env.TWILIO_AUTH_TOKEN);
+
+  const conversation = await twilioClient.conversations.v1
+    .conversations(conversationSid)
+    .fetch();
+
+  return JSON.parse(conversation.attributes)?.pre_engagement_data?.friendlyName;
+};
+
+const getCustomerNameFromConversation = async (
+  accountSid,
+  conversationsSid,
+  author,
+  source
+) => {
+  if (source !== "SMS") {
+    return await getFriendlyNameFromPreEngagementData(
+      accountSid,
+      conversationsSid
+    );
+  } else {
+    return author;
+  }
+};
+
 export const handler = async (event) => {
   const { request, ...eventWebhookPayload } = event;
   const { BotId, BotAliasId } = event.request.querystring;
-  const { ConversationSid, AccountSid, EventType, Body, Author, WebhookSid } =
-    eventWebhookPayload;
+  const {
+    ConversationSid,
+    AccountSid,
+    EventType,
+    Body,
+    Author,
+    WebhookSid,
+    Source,
+  } = eventWebhookPayload;
 
   if (!BotId || !BotAliasId) {
     console.warn("Missing BotId and/or BotAliasId");
@@ -161,6 +202,13 @@ export const handler = async (event) => {
     );
   }
 
+  const customerName = await getCustomerNameFromConversation(
+    AccountSid,
+    ConversationSid,
+    Author,
+    Source
+  );
+
   // for simplicty we are handling lex responses here and not even checking which bot id we are working with
   // In a real world scenario you may want to have a function router here for each bot
   // or you may want to move this handling logic to an intent code hook
@@ -168,7 +216,14 @@ export const handler = async (event) => {
 
   switch (intent) {
     case "Agent":
-      await sendToFlex(AccountSid, ConversationSid, BotId, Author, WebhookSid);
+      await sendToFlex(
+        AccountSid,
+        ConversationSid,
+        BotId,
+        customerName,
+        WebhookSid,
+        Source
+      );
       break;
 
     case "OrderFlowers":
